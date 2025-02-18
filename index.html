@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Playtest Scheduler (All Integer TZ + DST)</title>
+    <!-- React (Production UMD) -->
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <!-- ReactDOM (Production UMD) -->
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <!-- Babel Standalone for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 1rem;
+      }
+      .container {
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      .grid-5 {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.5rem;
+      }
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+      }
+      .btn {
+        background: #e0e0e0;
+        border: 1px solid #aaa;
+        padding: 0.3rem 0.6rem;
+        margin-top: 0.2rem;
+        cursor: pointer;
+      }
+      .btn.selected {
+        background-color: #2979ff;
+        color: #fff;
+      }
+      .field-label {
+        display: block;
+        margin-top: 1rem;
+        font-weight: bold;
+      }
+      textarea {
+        width: 100%;
+        height: 120px;
+        margin-top: 0.5rem;
+      }
+      .dst-toggle {
+        margin-top: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      // A simplified list of integer UTC offsets from UTC−12 to UTC+14,
+      // each with a rough "primary name" in English.
+      const timeZoneOptions = [
+        { offset: -12, label: "UTC−12: International Date Line West" },
+        { offset: -11, label: "UTC−11: Samoa, Midway Atoll" },
+        { offset: -10, label: "UTC−10: Hawaii Standard Time (HST)" },
+        { offset: -9,  label: "UTC−9: Alaska Standard Time (AKST)" },
+        { offset: -8,  label: "UTC−8: Pacific Standard Time (PST)" },
+        { offset: -7,  label: "UTC−7: Mountain Standard Time (MST)" },
+        { offset: -6,  label: "UTC−6: Central Standard Time (CST)" },
+        { offset: -5,  label: "UTC−5: Eastern Standard Time (EST)" },
+        { offset: -4,  label: "UTC−4: Atlantic Standard Time (AST)" },
+        { offset: -3,  label: "UTC−3: Argentina, Brazil (East)" },
+        { offset: -2,  label: "UTC−2: South Georgia & Sandwich Is." },
+        { offset: -1,  label: "UTC−1: Azores" },
+        { offset: 0,   label: "UTC±0: Greenwich Mean Time (GMT)" },
+        { offset: 1,   label: "UTC+1: Central European Time (CET)" },
+        { offset: 2,   label: "UTC+2: Eastern European Time (EET)" },
+        { offset: 3,   label: "UTC+3: Moscow Time" },
+        { offset: 4,   label: "UTC+4: Gulf Standard Time (GST)" },
+        { offset: 5,   label: "UTC+5: Pakistan Standard Time (PKT)" },
+        { offset: 6,   label: "UTC+6: Bangladesh Standard Time (BST)" },
+        { offset: 7,   label: "UTC+7: Indochina Time (ICT)" },
+        { offset: 8,   label: "UTC+8: China Standard Time (CST)" },
+        { offset: 9,   label: "UTC+9: Japan Standard Time (JST)" },
+        { offset: 10,  label: "UTC+10: Australian Eastern Time (AEST)" },
+        { offset: 11,  label: "UTC+11: Solomon Islands Time (SBT)" },
+        { offset: 12,  label: "UTC+12: New Zealand Standard Time (NZST)" },
+        { offset: 13,  label: "UTC+13: Tonga Time (TOT)" },
+        { offset: 14,  label: "UTC+14: Line Islands (LINT)" },
+      ];
+
+      function PlaytestScheduler() {
+        const greekLetters = [
+          { letter: "α", name: "Alpha" }, { letter: "β", name: "Beta" }, { letter: "γ", name: "Gamma" },
+          { letter: "δ", name: "Delta" }, { letter: "ε", name: "Epsilon" }, { letter: "ζ", name: "Zeta" },
+          { letter: "η", name: "Eta" }, { letter: "θ", name: "Theta" }, { letter: "ι", name: "Iota" },
+          { letter: "κ", name: "Kappa" }, { letter: "λ", name: "Lambda" }, { letter: "μ", name: "Mu" },
+          { letter: "ν", name: "Nu" }, { letter: "ξ", name: "Xi" }, { letter: "ο", name: "Omicron" },
+          { letter: "π", name: "Pi" }, { letter: "ρ", name: "Rho" }, { letter: "σ", name: "Sigma" },
+          { letter: "τ", name: "Tau" }, { letter: "υ", name: "Upsilon" }, { letter: "φ", name: "Phi" },
+          { letter: "χ", name: "Chi" }, { letter: "ψ", name: "Psi" }, { letter: "ω", name: "Omega" }
+        ];
+
+        // Basic state fields
+        const [selectedLetters, setSelectedLetters] = useState([]);
+        const [testType, setTestType] = useState("Escarion Update");
+
+        // Date/time
+        const [month, setMonth] = useState("");
+        const [day, setDay] = useState("");
+        const [year, setYear] = useState("");
+        const [hour, setHour] = useState("");
+        const [minute, setMinute] = useState("");
+        const [isPM, setIsPM] = useState(false);
+
+        // Time zone & DST
+        const [selectedZone, setSelectedZone] = useState(timeZoneOptions[0]); // default to the first (UTC−12)
+        const [isDST, setIsDST] = useState(false);
+
+        // Other fields
+        const [discordChannel, setDiscordChannel] = useState("");
+        const [patchNotesLink, setPatchNotesLink] = useState("");
+        const [testDuration, setTestDuration] = useState("2-hour");
+        const [isSpecial, setIsSpecial] = useState(false);
+
+        // Header toggles
+        const [isAllTeams, setIsAllTeams] = useState(false);
+        const [isPatchDay, setIsPatchDay] = useState(false);
+
+        // Toggle selection of teams
+        const toggleLetter = (letter) => {
+          setSelectedLetters((prev) =>
+            prev.includes(letter)
+              ? prev.filter((l) => l !== letter)
+              : [...prev, letter]
+          );
+        };
+
+        const toggleAllTeams = () => {
+          setSelectedLetters((prev) =>
+            prev.length === greekLetters.length
+              ? []
+              : greekLetters.map((g) => g.letter)
+          );
+        };
+
+        // AM/PM toggle
+        const toggleAMPM = () => {
+          setIsPM((prev) => !prev);
+        };
+
+        // Header toggles
+        const toggleAllTeamsHeader = () => setIsAllTeams((prev) => !prev);
+        const togglePatchDayHeader = () => setIsPatchDay((prev) => !prev);
+
+        // Generate the heading
+        const generateHeader = () => {
+          let header = "A Playtest is Starting Soon";
+          if (isAllTeams) header = "An All-Teams Playtest is Starting Soon";
+          if (isPatchDay) {
+            header = header.replace("Playtest", "Patch Day Playtest");
+          }
+          return header;
+        };
+
+        // Generate the Unix timestamp from user input
+        const generateTimestamp = () => {
+          if (!month || !day || !year || !hour || !minute) return "";
+
+          // Convert HH:MM + AM/PM => 24-hour local
+          let localHour = Number(hour);
+          if (isPM && localHour < 12) localHour += 12;
+          if (!isPM && localHour === 12) localHour = 0;
+
+          // If DST is on, effectively shift offset by +1
+          const effectiveOffset = selectedZone.offset + (isDST ? 1 : 0);
+
+          // local time in "UTC + offset" => UTC hour = localHour - offset
+          const utcHour = localHour - effectiveOffset;
+
+          // Build an absolute UTC Date
+          const date = new Date(Date.UTC(year, month - 1, day, utcHour, minute, 0));
+          return Math.floor(date.getTime() / 1000);
+        };
+
+        // Build the final Discord message
+        const buildMessage = () => {
+          const teams = selectedLetters
+            .map((letter) => {
+              const name = greekLetters.find((g) => g.letter === letter)?.name;
+              return `@Star ${name} [${letter}]`;
+            })
+            .join(" ");
+
+          const finalHeader = generateHeader();
+          const stamp = generateTimestamp();
+
+          // Prefix the final header with "## " to make it bigger in Discord
+          return `## ${finalHeader}
+
+### :SRA: A ${testType} test begins at <t:${stamp}:t> :SRA:
+
+__Open to the following Teams__:
+${teams}
+
+***All are welcome to watch and listen!***
+Join us in [Voice](${discordChannel}) for a${isSpecial ? " special" : ""} ${testDuration} test!
+
+Read the patch notes [here](${patchNotesLink})`;
+        };
+
+        // Copy to clipboard
+        const copyMessageToClipboard = () => {
+          const msg = buildMessage();
+          if (navigator && navigator.clipboard) {
+            navigator.clipboard.writeText(msg).catch((err) => {
+              console.error("Failed via navigator.clipboard, trying fallback:", err);
+              fallbackCopy(msg);
+            });
+          } else {
+            console.warn("Clipboard API not available, using fallback");
+            fallbackCopy(msg);
+          }
+        };
+
+        // Fallback copy
+        const fallbackCopy = (msg) => {
+          try {
+            const textArea = document.createElement("textarea");
+            textArea.value = msg;
+            document.body.appendChild(textArea);
+            textArea.select();
+            const successful = document.execCommand("copy");
+            document.body.removeChild(textArea);
+            if (!successful) {
+              throw new Error("document.execCommand did not return true");
+            }
+            console.log("Copied via fallback (execCommand)");
+          } catch (err) {
+            console.error("Fallback copy failed", err);
+          }
+        };
+
+        return (
+          <div className="container">
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
+              Playtest Scheduler (All Integer TZ + DST)
+            </h2>
+
+            {/* Toggle All-Teams & Patch Day */}
+            <div style={{ marginBottom: '1rem' }}>
+              <button className="btn" onClick={toggleAllTeamsHeader}>
+                {isAllTeams ? "Unset All-Teams" : "Set All-Teams"}
+              </button>
+              <button className="btn" onClick={togglePatchDayHeader} style={{ marginLeft: '1rem' }}>
+                {isPatchDay ? "Unset Patch Day" : "Set Patch Day"}
+              </button>
+            </div>
+
+            {/* Test Type */}
+            <label className="field-label">Test Type:</label>
+            <input
+              type="text"
+              value={testType}
+              onChange={(e) => setTestType(e.target.value)}
+            />
+
+            {/* Teams */}
+            <label className="field-label">Select Teams:</label>
+            <button className="btn" onClick={toggleAllTeams}>
+              {selectedLetters.length === greekLetters.length
+                ? "Deselect All Teams"
+                : "Select All Teams"}
+            </button>
+            <div className="grid-5" style={{ marginTop: '0.5rem' }}>
+              {greekLetters.map(({ letter, name }) => {
+                const isSelected = selectedLetters.includes(letter);
+                return (
+                  <button
+                    key={letter}
+                    className={`btn ${isSelected ? "selected" : ""}`}
+                    onClick={() => toggleLetter(letter)}
+                  >
+                    {name} [{letter}]
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Date Fields */}
+            <label className="field-label">Date (MM/DD/YYYY):</label>
+            <div className="grid-3">
+              <input
+                type="text"
+                placeholder="MM"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="DD"
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="YYYY"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              />
+            </div>
+
+            {/* Time Fields */}
+            <label className="field-label">Time (HH:MM):</label>
+            <div className="grid-3">
+              <input
+                type="text"
+                placeholder="HH"
+                value={hour}
+                onChange={(e) => setHour(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="MM"
+                value={minute}
+                onChange={(e) => setMinute(e.target.value)}
+              />
+              <button className="btn" onClick={toggleAMPM}>
+                {isPM ? "PM" : "AM"}
+              </button>
+            </div>
+
+            {/* Time Zone Selection */}
+            <label className="field-label">Select Your Time Zone:</label>
+            <select
+              value={selectedZone.offset}
+              onChange={(e) => {
+                const offsetNum = Number(e.target.value);
+                const chosenZone = timeZoneOptions.find(z => z.offset === offsetNum);
+                setSelectedZone(chosenZone);
+              }}
+              style={{ marginTop: '0.2rem' }}
+            >
+              {timeZoneOptions.map(zone => (
+                <option key={zone.offset} value={zone.offset}>
+                  {zone.label}
+                </option>
+              ))}
+            </select>
+
+            {/* DST Toggle */}
+            <div className="dst-toggle">
+              <button
+                className={`btn ${isDST ? "selected" : ""}`}
+                onClick={() => setIsDST(!isDST)}
+              >
+                {isDST ? "Turn DST Off" : "Currently Observing DST?"}
+              </button>
+            </div>
+
+            {/* Discord, Patch Notes, Duration */}
+            <label className="field-label">Discord Voice Channel Link:</label>
+            <input
+              type="text"
+              value={discordChannel}
+              onChange={(e) => setDiscordChannel(e.target.value)}
+            />
+
+            <label className="field-label">Patch Notes Link:</label>
+            <input
+              type="text"
+              value={patchNotesLink}
+              onChange={(e) => setPatchNotesLink(e.target.value)}
+            />
+
+            <label className="field-label">Test Duration:</label>
+            <input
+              type="text"
+              value={testDuration}
+              onChange={(e) => setTestDuration(e.target.value)}
+            />
+
+            {/* Special Test Toggle */}
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ marginRight: '0.5rem' }}>Special Test:</label>
+              <button
+                className={`btn ${isSpecial ? "selected" : ""}`}
+                onClick={() => setIsSpecial(!isSpecial)}
+              >
+                {isSpecial ? "Unset Special" : "Set Special"}
+              </button>
+            </div>
+
+            {/* Copy Button & Output */}
+            <div style={{ marginTop: '1rem' }}>
+              <button className="btn" onClick={copyMessageToClipboard}>
+                Copy to Clipboard
+              </button>
+            </div>
+
+            <label className="field-label" style={{ marginTop: '1rem' }}>Generated Message:</label>
+            <textarea
+              readOnly
+              value={buildMessage()}
+            />
+          </div>
+        );
+      }
+
+      function App() {
+        return <PlaytestScheduler />;
+      }
+
+      ReactDOM.render(<App />, document.getElementById("root"));
+    </script>
+  </body>
+</html>
