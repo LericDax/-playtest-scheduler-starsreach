@@ -95,6 +95,14 @@
         { offset: 14,  label: "UTC+14: Line Islands (LINT)" },
       ];
 
+      // Helper function: if testType starts with vowel, use "An"; else "A".
+      function getIndefiniteArticle(testType) {
+        if (!testType) return "A"; // fallback if empty
+        // Trim, check first character
+        const firstLetter = testType.trim().charAt(0).toLowerCase();
+        return "aeiou".includes(firstLetter) ? "An" : "A";
+      }
+
       function PlaytestScheduler() {
         const greekLetters = [
           { letter: "α", name: "Alpha" }, { letter: "β", name: "Beta" }, { letter: "γ", name: "Gamma" },
@@ -120,7 +128,7 @@
         const [isPM, setIsPM] = useState(false);
 
         // Time zone & DST
-        const [selectedZone, setSelectedZone] = useState(timeZoneOptions[0]); // default to the first (UTC−12)
+        const [selectedZone, setSelectedZone] = useState(timeZoneOptions[0]);
         const [isDST, setIsDST] = useState(false);
 
         // Other fields
@@ -172,15 +180,14 @@
         // Generate the Unix timestamp from user input
         const generateTimestamp = () => {
           if (!month || !day || !year || !hour || !minute) return "";
+          let localHour = Number(hour);
 
           // Convert HH:MM + AM/PM => 24-hour local
-          let localHour = Number(hour);
           if (isPM && localHour < 12) localHour += 12;
           if (!isPM && localHour === 12) localHour = 0;
 
           // If DST is on, effectively shift offset by +1
           const effectiveOffset = selectedZone.offset + (isDST ? 1 : 0);
-
           // local time in "UTC + offset" => UTC hour = localHour - offset
           const utcHour = localHour - effectiveOffset;
 
@@ -201,10 +208,13 @@
           const finalHeader = generateHeader();
           const stamp = generateTimestamp();
 
-          // Prefix the final header with "## " to make it bigger in Discord
+          // Decide whether to use "A" or "An" for the testType
+          const article = getIndefiniteArticle(testType);
+
+          // Return the final text with the correct indefinite article
           return `## ${finalHeader}
 
-### :SRA: A ${testType} test begins at <t:${stamp}:t> :SRA:
+### :SRA: ${article} ${testType} test begins at <t:${stamp}:t> :SRA:
 
 __Open to the following Teams__:
 ${teams}
@@ -404,7 +414,9 @@ Read the patch notes [here](${patchNotesLink})`;
               </button>
             </div>
 
-            <label className="field-label" style={{ marginTop: '1rem' }}>Generated Message:</label>
+            <label className="field-label" style={{ marginTop: '1rem' }}>
+              Generated Message:
+            </label>
             <textarea
               readOnly
               value={buildMessage()}
